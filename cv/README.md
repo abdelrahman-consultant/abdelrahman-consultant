@@ -1,27 +1,19 @@
-# Abdelrahman Mohamed — Professional CV
+# Abdelrahman Mohamed — CV
 
-Updated professional CV for **Abdelrahman Mohamed**, ERPNext Consultant.
-
-## Files
+## Classic version (same style as requested)
+Matches the traditional single-column CV layout (Times New Roman, section rules, right-aligned dates).
 
 | File | Description |
 |------|-------------|
-| `Abdelrahman_Mohamed_CV.pdf` | Print-ready A4 PDF (1 page) |
-| `Abdelrahman_Mohamed_CV.html` | Editable source (open in browser / print to PDF) |
-| `Abdelrahman_Mohamed_CV.md` | ATS-friendly plain text version |
+| `Abdelrahman_Mohamed_CV_Classic.pdf` | Print-ready classic CV |
+| `Abdelrahman_Mohamed_CV_Classic.html` | Editable classic source |
 
-## Key updates
+## Modern version (previous)
+| File | Description |
+|------|-------------|
+| `Abdelrahman_Mohamed_CV.pdf` | Modern sidebar layout |
+| `Abdelrahman_Mohamed_CV.html` | Editable modern source |
+| `Abdelrahman_Mohamed_CV.md` | ATS-friendly Markdown |
 
-- Email updated to **abdo.erpnext@gmail.com**
-- Cleaner one-page professional layout
-- Stronger summary and experience wording
-- Skills grouped by ERP delivery, functional, client, and tools
-- Modules and projects organized for quick scanning
-
-## Regenerate PDF
-
-```bash
-google-chrome --headless --disable-gpu --no-pdf-header-footer \
-  --print-to-pdf=cv/Abdelrahman_Mohamed_CV.pdf \
-  file://$PWD/cv/Abdelrahman_Mohamed_CV.html
-```
+## Contact
+**abdo.erpnext@gmail.com**
