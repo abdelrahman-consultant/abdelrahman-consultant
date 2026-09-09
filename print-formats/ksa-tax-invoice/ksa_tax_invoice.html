@@ -1,0 +1,596 @@
+<!--
+    KSA Tax Invoice — custom Jinja Print Format for ERPNext / Frappe.
+
+    Paste this file into Print Format → HTML (custom format).
+
+    Header: Frappe extracts id="header-html" and passes it to wkhtmltopdf
+    as --header-html so the letterhead repeats on every page. CSS tricks
+    (position:fixed, thead/tfoot, min-height) do not trigger that mechanism.
+
+    Footer: do NOT give the letterhead wrapper the footer-html id. That pins
+    the letterhead into the page-bottom margin (--margin-bottom), which:
+      1) leaves a large white gap under the bank details on a one-page invoice
+      2) crushes the letterhead into that thin strip (Frappe copies every
+         style tag into pdf_header_footer.html, whose body padding then fights
+         the 7.5mm slot).
+    Keep the Letter Head footer in document flow, immediately after the
+    bank details, using Frappe's standard .letter-head-footer class.
+-->
+<div id="header-html">
+    {% if letter_head %}
+        <div class="letter-head" style="margin-bottom: 0px;">{{ letter_head }}</div>
+    {% endif %}
+</div>
+
+
+
+<style>
+    .invoice-container {
+        font-family: Arial, "Helvetica Neue", Helvetica, Tahoma, sans-serif;
+        color: #000;
+        direction: ltr;
+        box-sizing: border-box;
+        padding: 0 !important; /* No side spacing */
+        margin: 0 !important;
+    }
+
+    /* FORCE ALL TEXT TO 9px (reduced to fit one page) */
+    .invoice-container td,
+    .invoice-container th,
+    .invoice-container span,
+    .invoice-container div {
+        font-size: 9px !important;
+        line-height: 1.3 !important;
+    }
+
+    /* FORCE ITEM SCHEDULE TO 8px to prevent wrapping */
+    table.item-schedule td,
+    table.item-schedule th,
+    table.item-schedule span {
+        font-size: 8px !important;
+    }
+
+    /* Keep main headers slightly larger so they stand out */
+    .invoice-container .blue-header {
+        font-size: 9.5px !important;
+    }
+    /* Main title */
+    .invoice-container .main-title {
+        font-size: 11px !important;
+    }
+
+    /* Slightly smaller font for the totals schedule so it fits the narrower column */
+    .totals-table td,
+    .totals-table span {
+        font-size: 8.5px !important;
+    }
+
+    /* Bank details block: still clear but compact */
+    table.bank-details td,
+    table.bank-details span {
+        font-size: 9px !important;
+        
+    }
+    table.bank-details tr.bank-values td {
+        color: #0056b3 !important;
+        padding: 2px !important;
+    }
+
+    .text-center { text-align: center !important; }
+    .text-right { text-align: right !important; }
+    .text-left { text-align: left !important; }
+    .bold { font-weight: bold !important; }
+
+    /* Strict Table Layout: Prevents tables from expanding off the page
+       — scoped to .invoice-container ONLY so it never touches
+       Frappe's own header-html/footer-html markup */
+    .invoice-container table {
+        width: 100% !important;
+        border-collapse: collapse !important;
+        margin-bottom: 1px !important;
+        table-layout: fixed !important;
+    }
+
+    .invoice-container th,
+    .invoice-container td {
+        border: 1px solid #a9a9a9 !important;
+        padding: 2px !important;
+        vertical-align: middle !important;
+        word-wrap: break-word !important;
+        overflow-wrap: break-word !important;
+        overflow: hidden !important;
+    }
+
+    /* Prevents word-breaking on specific labels like "District:" */
+    .nowrap {
+        white-space: nowrap !important;
+        width: auto !important;
+    }
+
+    /* Light Gray for Labels */
+    .lbl {
+        background-color: #f2f2f2 !important;
+        -webkit-print-color-adjust: exact !important;
+        color-adjust: exact !important;
+    }
+
+    /* Light Blue for Main Headers */
+    .blue-header {
+        background-color: #eaf4f8 !important;
+        color: #0056b3 !important;
+        -webkit-print-color-adjust: exact !important;
+        color-adjust: exact !important;
+    }
+    .blue-text {
+        color: #0056b3 !important;
+    }
+
+    /* Letter Head footer sits under bank details (in-flow, last page).
+       Do not target html/body here: Frappe copies every style tag into the
+       extracted header-html document. */
+    .letter-head-footer {
+        margin-top: 6px !important;
+        margin-bottom: 0 !important;
+        padding: 0 !important;
+        text-align: center;
+        page-break-inside: avoid;
+        page-break-before: avoid;
+    }
+    .letter-head-footer img {
+        width: auto !important;
+        max-width: 100% !important;
+        height: auto !important;
+        max-height: 22mm !important;
+        display: block;
+        margin: 0 auto;
+        object-fit: contain;
+    }
+</style>
+
+<div class="invoice-container">
+
+    <table>
+        <colgroup>
+            <col style="width: 15%;">
+            <col style="width: 35%;">
+            <col style="width: 35%;">
+            <col style="width: 15%;">
+        </colgroup>
+        <tr>
+            <td colspan="4" class="text-center blue-header bold main-title" style="letter-spacing: 1px;">
+                T A X  Invoice  / فاتورة ضريبية 
+            </td>
+        </tr>
+        <tr>
+            <td class="lbl blue-text bold text-left nowrap">Invoice No:</td>
+            <td class="blue-text bold">{{ doc.name }}</td>
+            <td class="text-right blue-text bold">{{ doc.name }}</td>
+            <td class="text-right lbl blue-text bold nowrap">رقم الفاتورة</td>
+        </tr>
+    </table>
+
+    <table>
+        <colgroup>
+            <col style="width: 11%;"> <col style="width: 17%;"> <col style="width: 9%;">  <col style="width: 13%;"> <col style="width: 13%;"> <col style="width: 9%;">  <col style="width: 17%;"> <col style="width: 11%;"> </colgroup>
+        <tr>
+            <td colspan="4" class="blue-header text-left bold">Seller Details</td>
+            <td colspan="4" class="blue-header text-right bold">المورد</td>
+        </tr>
+        <tr>
+            <td class="lbl nowrap">Name:</td>
+            <td colspan="3" class="bold">{{ doc.company }}</td>
+            <td colspan="3" class="text-right bold">{{ frappe.db.get_value('Company', doc.company, 'company_name_in_arabic') or '' }}</td>
+            <td class="text-right lbl nowrap">الاسم</td>
+        </tr>
+        <tr>
+            <td class="lbl nowrap">Street Name:</td>
+            <td colspan="3">{{ frappe.db.get_value('Address', doc.company_address, 'address_line1') or '' }}</td>
+            <td colspan="3" class="text-right">{{ frappe.db.get_value('Address', doc.company_address, 'address_in_arabic') or '' }}</td>
+            <td class="text-right lbl nowrap">اسم الشارع</td>
+        </tr>
+        <tr>
+            <td class="lbl nowrap">Building No:</td>
+            <td>{{ frappe.db.get_value('Address', doc.company_address, 'custom_building_number') or '' }}</td>
+            <td class="lbl text-center nowrap">City:</td>
+            <td>{{ frappe.db.get_value('Address', doc.company_address, 'city') or '' }}</td>
+            <td class="text-right">{{ frappe.db.get_value('Address', doc.company_address, 'city') or '' }}</td>
+            <td class="lbl text-center nowrap">المدينة</td>
+            <td class="text-right">{{ frappe.db.get_value('Address', doc.company_address, 'custom_building_number') or '' }}</td>
+            <td class="text-right lbl nowrap">رقم المبنى</td>
+        </tr>
+        <tr>
+            <td class="lbl nowrap">Addl. No:</td>
+            <td>{{ doc.custom_additional_no or '' }}</td>
+            <td class="lbl text-center nowrap">District:</td>
+            <td>{{ frappe.db.get_value('Address', doc.company_address, 'custom_area') or '' }}</td>
+            <td class="text-right">{{ frappe.db.get_value('Address', doc.company_address, 'custom_area') or '' }}</td>
+            <td class="lbl text-center nowrap">الحي</td>
+            <td class="text-right">{{ doc.custom_additional_no or '' }}</td>
+            <td class="text-right lbl nowrap">الرقم الاضافي</td>
+        </tr>
+        <tr>
+            <td class="lbl nowrap">Postal Code:</td>
+            <td>{{ frappe.db.get_value('Address', doc.company_address, 'pincode') or '' }}</td>
+            <td class="lbl text-center nowrap">Country:</td>
+            <td>{{ frappe.db.get_value('Address', doc.company_address, 'country') or '' }}</td>
+            <td class="text-right nowrap">المملكة العربية السعودية</td>
+            <td class="lbl text-center nowrap">البلد</td>
+            <td class="text-right">{{ frappe.db.get_value('Address', doc.company_address, 'pincode') or '' }}</td>
+            <td class="text-right lbl nowrap">الرمز البريدي</td>
+        </tr>
+        <tr>
+            <td class="lbl nowrap">VAT Number:</td>
+            <td class="bold nowrap">{{ frappe.db.get_value('Company', doc.company, 'tax_id') or '' }}</td>
+            <td class="lbl text-center nowrap">CRN</td>
+            <td class="text-center bold">{{ frappe.db.get_value('Company', doc.company, 'cr_number') or '' }}</td>
+            <td class="text-center bold">{{ frappe.db.get_value('Company', doc.company, 'cr_number') or '' }}</td>
+            <td class="lbl text-center nowrap">معرف آخر</td>
+            <td class="text-right bold nowrap">{{ frappe.db.get_value('Company', doc.company, 'tax_id') or '' }}</td>
+            <td class="text-right lbl nowrap">الرقم الضريبي</td>
+        </tr>
+    </table>
+
+    <table>
+        <colgroup>
+            <col style="width: 11%;">
+            <col style="width: 17%;">
+            <col style="width: 9%;">
+            <col style="width: 13%;">
+            <col style="width: 13%;">
+            <col style="width: 9%;">
+            <col style="width: 17%;">
+            <col style="width: 11%;">
+        </colgroup>
+        <tr>
+            <td colspan="4" class="blue-header text-left bold">Buyer Details</td>
+            <td colspan="4" class="blue-header text-right bold">تفاصيل شركة العميل</td>
+        </tr>
+        <tr>
+            <td class="lbl nowrap">Name:</td>
+            <td colspan="3" class="bold">{{ doc.customer_name }}</td>
+            <td colspan="3" class="text-right bold">{{ frappe.db.get_value('Customer', doc.customer, 'custom_customer_arabic_name') or '' }}</td>
+            <td class="text-right lbl nowrap">الاسم</td>
+        </tr>
+        <tr>
+            <td class="lbl nowrap">Street Name:</td>
+            <td colspan="3">{{ frappe.db.get_value('Address', doc.customer_address, 'address_line1') or '' }}</td>
+            <td colspan="3" class="text-right">{{ frappe.db.get_value('Address', doc.customer_address, 'address_in_arabic') or '' }}</td>
+            <td class="text-right lbl nowrap">اسم الشارع</td>
+        </tr>
+        <tr>
+            <td class="lbl nowrap">Building No:</td>
+            <td>{{ frappe.db.get_value('Address', doc.customer_address, 'custom_building_number') or '' }}</td>
+            <td class="lbl text-center nowrap">City:</td>
+            <td>{{ frappe.db.get_value('Address', doc.customer_address, 'city') or '' }}</td>
+            <td class="text-right">{{ frappe.db.get_value('Address', doc.customer_address, 'city') or '' }}</td>
+            <td class="lbl text-center nowrap">المدينة</td>
+            <td class="text-right">{{ frappe.db.get_value('Address', doc.customer_address, 'custom_building_number') or '' }}</td>
+            <td class="text-right lbl nowrap">رقم المبنى</td>
+        </tr>
+        <tr>
+            <td class="lbl nowrap">Addl. No:</td>
+            <td>{{ frappe.db.get_value('Address', doc.customer_address, 'address_line2') or '' }}</td>
+            <td class="lbl text-center nowrap">District:</td>
+            <td>{{ frappe.db.get_value('Address', doc.customer_address, 'custom_area') or '' }}</td>
+            <td class="text-right">{{ frappe.db.get_value('Address', doc.customer_address, 'custom_area') or '' }}</td>
+            <td class="lbl text-center nowrap">الحي</td>
+            <td class="text-right">{{ frappe.db.get_value('Address', doc.customer_address, 'address_line2') or '' }}</td>
+            <td class="text-right lbl nowrap">الرقم الاضافي</td>
+        </tr>
+        <tr>
+            <td class="lbl nowrap">Postal Code:</td>
+            <td>{{ frappe.db.get_value('Address', doc.customer_address, 'pincode') or '' }}</td>
+            <td class="lbl text-center nowrap">Country:</td>
+            <td>{{ frappe.db.get_value('Address', doc.customer_address, 'country') or '' }}</td>
+            <td class="text-right nowrap">المملكة العربية السعودية</td>
+            <td class="lbl text-center nowrap">البلد</td>
+            <td class="text-right">{{ frappe.db.get_value('Address', doc.customer_address, 'pincode') or '' }}</td>
+            <td class="text-right lbl nowrap">الرمز البريدي</td>
+        </tr>
+        <tr>
+            <td class="lbl nowrap">VAT Number:</td>
+            <td class="bold nowrap">{{ doc.get("custom_vat_registration_number") or frappe.db.get_value('Customer', doc.customer, 'tax_id') or '' }}</td>
+            <td class="lbl text-center nowrap">CRN</td>
+            <td>
+    {% set ids = frappe.get_all("Additional Buyer IDs",
+        filters={
+            "parent": doc.customer,
+            "parenttype": "Customer",
+            "type_code": "CRN"
+        },
+        fields=["value"]
+    ) %}
+
+    {% if ids %}
+        {{ ids[0].value }}
+    {% endif %}
+</td>
+            <td class="text-right nowrap"> {% set customer = frappe.get_doc("Customer", doc.customer) %}
+
+{% for row in customer.custom_additional_ids %}
+    {% if row.type_code == "CRN" %}
+        {{ row.value }}
+    {% endif %}
+{% endfor %} </td>
+            <td class="lbl text-center nowrap">معرف آخر</td>
+            <td class="text-right bold nowrap">{{ doc.get("custom_vat_registration_number") or frappe.db.get_value('Customer', doc.customer, 'tax_id') or '' }}</td>
+            <td class="text-right lbl nowrap">الرقم الضريبي</td>
+        </tr>
+    </table>
+
+    <table>
+        <colgroup>
+            <col style="width: 15%;">
+            <col style="width: 15%;">
+            <col style="width: 20%;">
+            <col style="width: 15%;">
+            <col style="width: 15%;">
+            <col style="width: 20%;">
+        </colgroup>
+        <tr class="text-center lbl nowrap">
+            <td>تاريخ الفاتورة<br>Invoice Date</td>
+            <td>تاريخ التسليم<br>Supply Date</td>
+            <td>رقم أمر الشراء<br>Contract/PO No</td>
+            <td>تاريخ الاستحقاق<br>Due Date</td>
+            <td>فترة الفاتورة<br>Invoice Period</td>
+            <td>رقم المرجع<br>Project / Reference No</td>
+        </tr>
+        <tr class="text-center ">
+            <td class='nowrap'>{{ doc.get_formatted("posting_date") }}</td>
+            <td class='nowrap'>{{ doc.get_formatted("date_of_supply") or '' }}</td>
+            <td >{{ doc.po_no or '' }}</td>
+            <td class='nowrap'>{{ doc.get_formatted("due_date") }}</td>
+            <td class='nowrap'>{{ doc.custom_invoice_period_from or '' }}<br>{{ doc.custom_period_to or '' }}</td>
+            <td >{{ doc.ref_cn or '' }}</td>
+        </tr>
+    </table>
+
+    <table class="item-schedule">
+        <colgroup>
+            <col style="width: 3%;">  <col style="width: 8%;">  <col style="width: 26%;"> <col style="width: 4%;">  <col style="width: 4%;">  <col style="width: 9%;"> <col style="width: 7%;">  <col style="width: 11%;"> <col style="width: 5%;">  <col style="width: 10%;"> <col style="width: 12%;"> </colgroup>
+        <tr class="text-center lbl nowrap">
+            <td>#</td>
+            <td>Code (SKU)<br>الرمز</td>
+            <td>Nature of goods or service<br>تفاصيل السلع أو الخدمات</td>
+            <td>Qty<br>الكمية</td>
+            <td>Unit<br>وحدة</td>
+            <td>Unit Price<br>سعر الوحدة</td>
+            <td>Discount<br>الخصومات</td>
+            <td>Subtotal Excl.<br>إجمالي غير شامل</td>
+            <td>Tax %  <br> نسبة </td>
+            <td>Tax Amount<br>الضريبة</td>
+            <td>Subtotal Incl.<br>المبلغ شامل</td>
+        </tr>
+        {% for row in doc.items %}
+        <tr class="text-center" style='height: 35px !important;'>
+            <td class="nowrap">{{ loop.index }}</td>
+            <td class="nowrap">{{ row.item_code }}<br></td>
+            <td class="text-left">
+                {{ (row.description or row.item_name or "") | striptags }}
+                {%- if row.custom_item_name_in_arabic %}
+                <br><span dir="rtl">{{ row.custom_item_name_in_arabic }}</span>
+                {%- endif %}
+            </td>
+            <td class="nowrap">{{ "{:,.2f}".format(row.qty) }}</td>
+            <td class="nowrap">{{ row.uom }}</td>
+            <td class="nowrap">{{ "{:,.2f}".format(row.rate) }}</td>
+            <td class="nowrap">{{ "{:,.2f}".format(row.discount_amount or 0.0) }}</td>
+            <td class="nowrap">{{ "{:,.2f}".format(row.amount) }}</td>
+            <td class="nowrap">{{ row.tax_rate  }}%</td>
+            <td class="nowrap">{{ "{:,.2f}".format(row.tax_amount ) }}</td>
+            <td class="nowrap">{{ "{:,.2f}".format(row.total_amount) }}</td>
+        </tr>
+        {% endfor %}
+        <tr>
+            <td colspan="11" class="text-center" style="color: #555;">***** Nothing follow / لا شيء يتبع *****</td>
+        </tr>
+    </table>
+    
+    <table style="border: none !important; margin-bottom: 2px !important;">
+        <colgroup>
+            <col style="width: 30%;"> <col style="width: 70%;"> </colgroup>
+        <tr>
+            <td style="border: none !important; vertical-align: top !important; padding: 5px 0px 5px 0px !important;">
+                {#- ZATCA QR. It is NOT on the Sales Invoice - ksa_compliance keeps it on
+                    the linked `Sales Invoice Additional Fields` document - so `doc.qr_code`
+                    was always empty and this block silently drew nothing.
+
+                    Fetched with get_doc, NOT get_all: `qr_image_src` is a computed field
+                    with no database column, so selecting it in a query dies with
+                    MySQL 1054 Unknown column and the whole format 500s.
+                    Use `qr_image_src` (a data:image/png;base64 URI) and NOT `qr_code`,
+                    which is the raw ZATCA TLV string and renders as a broken image. -#}
+                {%- set _saf = frappe.db.get_value("Sales Invoice Additional Fields",
+                        {"sales_invoice": doc.name, "docstatus": 1}, "name")
+                        or frappe.db.get_value("Sales Invoice Additional Fields",
+                        {"sales_invoice": doc.name}, "name") %}
+                {%- set _qr = frappe.get_doc("Sales Invoice Additional Fields", _saf).qr_image_src if _saf else None %}
+                {% if _qr %}
+                    <img src="{{ _qr }}" alt="QR Code" style="width: 55mm !important; height: 55mm !important; max-width: 55mm !important; object-fit: contain; border: 1px solid #a9a9a9; padding: 2px; margin-top: 5px;">{#- !important on BOTH axes is required, not tidiness: Frappe's print bundle ships
+                        `body:last-child .print-format td img { width: 100% !important; }` (a Mozilla
+                        table-image hack). A stylesheet !important outranks a plain inline style, so the
+                        width stretched to the whole cell while height stayed 90px and the QR came out a
+                        wide rectangle. Only an INLINE !important beats it. -#}
+                {% endif %}
+            </td>
+           
+        
+         <td style="
+            border: none !important;
+            vertical-align: top !important;
+            padding:10px 0px 5px 0px !important;
+            height: 45mm !important;
+        ">
+
+            <table class="totals-table"
+                   style="
+                       margin: 0 !important;
+                       width: 100% !important;
+                       height: 55mm !important;
+                   ">
+
+                <colgroup>
+                    <col style="width: 35%;">
+                    <col style="width: 30%;">
+                    <col style="width: 35%;">
+                </colgroup>
+
+                <tr>
+                    <td class="lbl bold nowrap">Total Amount (SAR):</td>
+                    <td class="text-right bold nowrap">
+                        {{ "{:,.2f}".format(doc.total) }}
+                    </td>
+                    <td class="lbl text-right bold nowrap">
+                        المبلغ الإجمالي (ريال سعودي)
+                    </td>
+                </tr>
+
+                <tr>
+                    <td class="lbl bold nowrap">Total Discount (SAR):</td>
+                    <td class="text-right bold nowrap">
+                        {{ "{:,.2f}".format(doc.discount_amount) }}
+                    </td>
+                    <td class="lbl text-right bold nowrap">
+                        الخصم الاضافي (ريال سعودي)
+                    </td>
+                </tr>
+
+                <tr>
+                    <td class="lbl bold nowrap">Invoice Taxable Amount (SAR):</td>
+                    <td class="text-right bold nowrap">
+                        {{ "{:,.2f}".format(doc.net_total) }}
+                    </td>
+                    <td class="lbl text-right bold nowrap">
+                        المبلغ الخاضع للضريبة (غير شامل )(ريال سعودي)
+                    </td>
+                </tr>
+
+                <tr>
+                    <td class="lbl bold nowrap">VAT Total Amount (SAR):</td>
+                    <td class="text-right bold nowrap">
+                        {{ "{:,.2f}".format(doc.total_taxes_and_charges) }}
+                    </td>
+                    <td class="lbl text-right bold nowrap">
+                        اجمالي مبلغ ضريبة القيمة المضافة (ريال سعودي)
+                    </td>
+                </tr>
+
+                <tr>
+                    <td class="lbl bold nowrap">Gross Total (Incl. of VAT) (SAR):</td>
+                    <td class="text-right bold nowrap">
+                        {{ "{:,.2f}".format(doc.grand_total) }}
+                    </td>
+                    <td class="lbl text-right bold nowrap">
+                        إجمالي قيمة الفاتورة (شامل ضريبة )(ريال سعودي)
+                    </td>
+                </tr>
+
+                <tr>
+                    <td class="lbl bold nowrap">Less: Retention (SAR):</td>
+                    <td class="text-right bold nowrap">
+                        {{ "{:,.2f}".format(doc.custom_retention_deduction_amount) }}
+                    </td>
+                    <td class="lbl text-right bold nowrap">
+                        إجمالي قيمة الفاتورة (ريال سعودي)
+                    </td>
+                </tr>
+
+                <tr>
+                    <td class="lbl bold nowrap">Balance Due (SAR):</td>
+                    <td class="text-right bold nowrap">
+                        {{ "{:,.2f}".format(
+                            doc.custom_grand_total_after_retention
+                            if doc.custom_grand_total_after_retention
+                            else doc.outstanding_amount-doc.custom_retention_deduction_amount
+                        ) }}
+                    </td>
+                    <td class="lbl text-right bold nowrap">
+                        إجمالي المبلغ المستحق (ريال سعودي)
+                    </td>
+                </tr>
+
+                <tr>
+                    <td colspan="3" style="padding: 1px !important;">
+                        <span class="lbl bold nowrap"
+                              style="
+                                  border:none !important;
+                                  padding:0 !important;
+                                  background:transparent !important;
+                              ">
+                            Amount in words:
+                        </span>
+
+                        {{ doc.custom_amount_in_wordsafter_retention
+                           if doc.custom_amount_in_wordsafter_retention
+                           else doc.base_in_words }}
+                    </td>
+                </tr>
+            </table>
+        </td>
+        </tr>
+    </table>
+
+    <table class="bank-details">
+        <colgroup>
+            <col style="width: 20%;">
+            <col style="width: 40%;">
+            <col style="width: 20%;">
+            <col style="width: 20%;">
+        </colgroup>
+        <tr class="blue-header bold nowrap">
+            <td class="lbl nowrap">Payee Name:</td>
+            <td class="text-left">{{ doc.company }}</td>
+            <td class="text-right">{{ frappe.db.get_value('Company', doc.company, 'company_name_in_arabic') or '' }}</td>
+            <td class="text-right lbl nowrap">اسم المستفيد من الحساب</td>
+        </tr>
+    </table>
+    <table class="bank-details">
+        <colgroup>
+            <col style="width: 20%;">
+            <col style="width: 20%;">
+            <col style="width: 20%;">
+            <col style="width: 20%;">
+            <col style="width: 20%;">
+        </colgroup>
+        <tr class="lbl text-center bold nowrap">
+            <td>Account Number<br>رقم الحساب</td>
+            <td>Bank<br>المصرف</td>
+            <td>Branch<br>فرع</td>
+            <td>IBAN<br>رقم الأيبان</td>
+            <td>Swift<br>رقم السويفت</td>
+        </tr>
+        <tr class="bank-values text-center bold nowrap">
+            <td>{{ frappe.db.get_value('Bank Account', doc.custom_bank_account, 'bank_account_no') or '' }}</td>
+            <td>{{ frappe.db.get_value('Bank Account', doc.custom_bank_account, 'bank') or '' }}</td>
+            <td>{{ frappe.db.get_value('Bank Account', doc.custom_bank_account, 'branch_code') or 'Main' }}</td>
+            <td>{{ frappe.db.get_value('Bank Account', doc.custom_bank_account, 'iban') or '' }}</td>
+            <td>{{ frappe.db.get_value('Bank', doc.custom_bank_name, 'swift_number') or '' }}</td>
+        </tr>
+    </table>
+
+</div>
+
+{% if footer %}
+<div class="letter-head-footer">{{ footer }}</div>
+{% endif %}
+<style>
+/* PAGE MARGINS: THE NUMBER HERE IS HALF WHAT YOU GET (measured 2.5mm -> 4.7mm).
+   The declaration is consumed twice - frappe/utils/pdf.py scrapes any
+   `.print-format` rule for `margin-*: Nmm;` into wkhtmltopdf's --margin-*, and
+   it also applies as real CSS to the page div. One declaration per line (the
+   regex is greedy and newline-bounded), no !important (it needs the literal
+   `mm;`), and do not rename the selector or scope it to @media screen.
+
+   Do NOT put html/body { margin/padding !important } in this format: Frappe
+   copies every style tag into the extracted header-html document and it will
+   override pdf_header_footer.html's body padding.
+
+   margin-bottom stays small because the letterhead footer is in the body
+   (under bank details), not in a wkhtmltopdf --footer-html slot. */
+.print-format {
+	margin-left: 2.5mm;
+	margin-right: 2.5mm;
+	margin-top: 7.5mm;
+	margin-bottom: 5mm;
+}
+</style>
